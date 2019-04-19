@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<info>
+	<id>user_ldap_migrate</id>
+	<name>LDAP Change Internal Username</name>
+	<summary>Integrate LDAP user directories</summary>
+	<description>
+			lorem ipsum
+	</description>
+	<licence>AGPL</licence>
+	<author>Semih Serhat Karakaya</author>
+	<version>0.0.1</version>
+	<dependencies>
+		<owncloud min-version="10.0.8" max-version="10.1" />
+	</dependencies>
+	<namespace>User_LDAP_Migrate</namespace>
+	<commands>
+		<command>OCA\User_LDAP_Migrate\Command\ChangeInternalUsername</command>
+	</commands>
+</info>
