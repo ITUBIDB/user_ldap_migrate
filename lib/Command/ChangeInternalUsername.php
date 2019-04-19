@@ -77,7 +77,7 @@ class ChangeInternalUsername extends Command {
 				"Changing " . $mapping['owncloud_name'] . " internal username as " . $mapping['directory_uuid'] ,
 				'status'
 			);
-			$this->fixDbRecordForUser($mapping['owncloud_name'], $mapping['directory_uuid']);
+			$this->fixDbRecordsForUser($mapping['owncloud_name'], $mapping['directory_uuid']);
 			$progressBar->setMessage($mapping['owncloud_name']);
 			$progressBar->advance();
 		}
@@ -89,14 +89,94 @@ class ChangeInternalUsername extends Command {
 	 * @param string $username
 	 * @param string $uuid
 	 */
-	protected function fixDbRecordForUser($username, $uuid) {
+	protected function fixDbRecordsForUser($username, $uuid) {
 		$this->fixAccountRecordForUser($username, $uuid);
+		$this->fixActivityRecordsForUser($username, $uuid);
 		$this->fixAuthTokenRecordsForUser($username, $uuid);
 		$this->fixLdapUserMappingRecordForUser($username, $uuid);
 		$this->fixMountRecordsForUser($username, $uuid);
 		$this->fixPreferencesRecordsForUser($username, $uuid);
 		$this->fixShareRecordsForUser($username, $uuid);
 		$this->fixStorageRecordForUser($username, $uuid);
+	}
+
+	/**
+	 * @param string $username
+	 * @param string $uuid
+	 */
+	private function fixAccountRecordForUser($username, $uuid) {
+		$builder = $this->dbConection->getQueryBuilder();
+		$exprBuilder = $builder->expr();
+		$builder
+			->update('accounts')
+			->set('user_id', $builder->createNamedParameter($uuid))
+			->set('lower_user_id', $builder->createNamedParameter(strtolower($uuid)))
+			->where($exprBuilder->eq('user_id', $exprBuilder->literal($username)))
+			->execute();
+	}
+
+	/**
+	 * @param string $username
+	 * @param string $uuid
+	 */
+	private function fixActivityRecordsForUser($username, $uuid) {
+		$builder = $this->dbConection->getQueryBuilder();
+		$exprBuilder = $builder->expr();
+		//fix get all user related activities
+		$activitiesOfUser = $builder
+			->select(['activity_id', 'user', 'affecteduser'])
+			->from('activity')
+			->where($exprBuilder->eq('user', $exprBuilder->literal($username)))
+			->orWhere($exprBuilder->eq('affecteduser', $exprBuilder->literal($username)))
+			->execute()
+			->fetchAll();
+
+		foreach ($activitiesOfUser as $activity) {
+			$builder = $this->dbConection->getQueryBuilder();
+			$exprBuilder = $builder->expr();
+			if($activity['user'] === $username) {
+				$activity['user'] = $uuid;
+
+			}
+			if($activity['affecteduser'] === $username) {
+				$activity['affecteduser'] = $uuid;
+
+			}
+			$builder
+				->update('activity')
+				->set('user', $builder->createNamedParameter($activity['user']))
+				->set('affecteduser', $builder->createNamedParameter($activity['affecteduser']))
+				->where($exprBuilder->eq('activity_id', $exprBuilder->literal($activity['activity_id'])))
+				->execute();
+		}
+	}
+
+	/**
+	 * @param string $username
+	 * @param string $uuid
+	 */
+	private function fixAuthTokenRecordsForUser($username, $uuid) {
+		$builder = $this->dbConection->getQueryBuilder();
+		$exprBuilder = $builder->expr();
+		$builder
+			->update('authtoken')
+			->set('uid', $builder->createNamedParameter($uuid))
+			->where($exprBuilder->eq('uid', $exprBuilder->literal($username)))
+			->execute();
+	}
+
+	/**
+	 * @param string $username
+	 * @param string $uuid
+	 */
+	private function fixLdapUserMappingRecordForUser($username, $uuid) {
+		$builder = $this->dbConection->getQueryBuilder();
+		$exprBuilder = $builder->expr();
+		$builder
+			->update('ldap_user_mapping')
+			->set('owncloud_name', $builder->createNamedParameter($uuid))
+			->where($exprBuilder->eq('owncloud_name', $exprBuilder->literal($username)))
+			->execute();
 	}
 
 	/**
@@ -131,50 +211,7 @@ class ChangeInternalUsername extends Command {
 				->execute();
 		}
 	}
-
-	/**
-	 * @param string $username
-	 * @param string $uuid
-	 */
-	private function fixAuthTokenRecordsForUser($username, $uuid) {
-		$builder = $this->dbConection->getQueryBuilder();
-		$exprBuilder = $builder->expr();
-		$builder
-			->update('authtoken')
-			->set('uid', $builder->createNamedParameter($uuid))
-			->where($exprBuilder->eq('uid', $exprBuilder->literal($username)))
-			->execute();
-	}
-
-	/**
-	 * @param string $username
-	 * @param string $uuid
-	 */
-	private function fixAccountRecordForUser($username, $uuid) {
-		$builder = $this->dbConection->getQueryBuilder();
-		$exprBuilder = $builder->expr();
-		$builder
-			->update('accounts')
-			->set('user_id', $builder->createNamedParameter($uuid))
-			->set('lower_user_id', $builder->createNamedParameter(strtolower($uuid)))
-			->where($exprBuilder->eq('user_id', $exprBuilder->literal($username)))
-			->execute();
-	}
-
-	/**
-	 * @param string $username
-	 * @param string $uuid
-	 */
-	private function fixLdapUserMappingRecordForUser($username, $uuid) {
-		$builder = $this->dbConection->getQueryBuilder();
-		$exprBuilder = $builder->expr();
-		$builder
-			->update('ldap_user_mapping')
-			->set('owncloud_name', $builder->createNamedParameter($uuid))
-			->where($exprBuilder->eq('owncloud_name', $exprBuilder->literal($username)))
-			->execute();
-	}
-
+	
 	/**
 	 * @param string $username
 	 * @param string $uuid
