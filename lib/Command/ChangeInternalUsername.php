@@ -77,7 +77,7 @@ class ChangeInternalUsername extends Command {
 				"Changing " . $mapping['owncloud_name'] . " internal username as " . $mapping['directory_uuid'] ,
 				'status'
 			);
-			$this->fixDbRecordsForUser($mapping['owncloud_name'], $mapping['directory_uuid']);
+			$this->fixDbRecords($mapping['owncloud_name'], $mapping['directory_uuid']);
 			$progressBar->setMessage($mapping['owncloud_name']);
 			$progressBar->advance();
 		}
@@ -89,22 +89,25 @@ class ChangeInternalUsername extends Command {
 	 * @param string $username
 	 * @param string $uuid
 	 */
-	protected function fixDbRecordsForUser($username, $uuid) {
-		$this->fixAccountRecordForUser($username, $uuid);
-		$this->fixActivityRecordsForUser($username, $uuid);
-		$this->fixAuthTokenRecordsForUser($username, $uuid);
-		$this->fixLdapUserMappingRecordForUser($username, $uuid);
-		$this->fixMountRecordsForUser($username, $uuid);
-		$this->fixPreferencesRecordsForUser($username, $uuid);
-		$this->fixShareRecordsForUser($username, $uuid);
-		$this->fixStorageRecordForUser($username, $uuid);
+	protected function fixDbRecords($username, $uuid) {
+		$this->fixAccountRecord($username, $uuid);
+		$this->fixActivityRecords($username, $uuid);
+		$this->fixAuthTokenRecords($username, $uuid);
+		$this->fixCommentRecords($username, $uuid);
+		$this->fixCommentRecordReadMarkers($username, $uuid);
+		$this->fixLdapUserMappingRecord($username, $uuid);
+		$this->fixMountRecords($username, $uuid);
+		$this->fixPreferencesRecords($username, $uuid);
+		$this->fixShareRecords($username, $uuid);
+		$this->fixStorageRecord($username, $uuid);
+		$this->fixVcategoryRecords($username, $uuid);
 	}
 
 	/**
 	 * @param string $username
 	 * @param string $uuid
 	 */
-	private function fixAccountRecordForUser($username, $uuid) {
+	private function fixAccountRecord($username, $uuid) {
 		$builder = $this->dbConection->getQueryBuilder();
 		$exprBuilder = $builder->expr();
 		$builder
@@ -119,15 +122,18 @@ class ChangeInternalUsername extends Command {
 	 * @param string $username
 	 * @param string $uuid
 	 */
-	private function fixActivityRecordsForUser($username, $uuid) {
+	private function fixActivityRecords($username, $uuid) {
 		$builder = $this->dbConection->getQueryBuilder();
 		$exprBuilder = $builder->expr();
-		//fix get all user related activities
+		$oldParam = '"' . $username . '"';
+		$newParam = '"' . $uuid . '"';
+		//get all user related activities
 		$activitiesOfUser = $builder
-			->select(['activity_id', 'user', 'affecteduser'])
+			->select(['activity_id', 'user', 'affecteduser', 'subjectparams'])
 			->from('activity')
 			->where($exprBuilder->eq('user', $exprBuilder->literal($username)))
 			->orWhere($exprBuilder->eq('affecteduser', $exprBuilder->literal($username)))
+			->orWhere($exprBuilder->like('subjectparams', $exprBuilder->literal('%' . $oldParam . '%')))
 			->execute()
 			->fetchAll();
 
@@ -142,10 +148,12 @@ class ChangeInternalUsername extends Command {
 				$activity['affecteduser'] = $uuid;
 
 			}
+			$activity['subjectparams'] = str_replace($oldParam, $newParam, $activity['subjectparams']);
 			$builder
 				->update('activity')
 				->set('user', $builder->createNamedParameter($activity['user']))
 				->set('affecteduser', $builder->createNamedParameter($activity['affecteduser']))
+				->set('subjectparams', $builder->createNamedParameter($activity['subjectparams']))
 				->where($exprBuilder->eq('activity_id', $exprBuilder->literal($activity['activity_id'])))
 				->execute();
 		}
@@ -155,7 +163,7 @@ class ChangeInternalUsername extends Command {
 	 * @param string $username
 	 * @param string $uuid
 	 */
-	private function fixAuthTokenRecordsForUser($username, $uuid) {
+	private function fixAuthTokenRecords($username, $uuid) {
 		$builder = $this->dbConection->getQueryBuilder();
 		$exprBuilder = $builder->expr();
 		$builder
@@ -169,7 +177,35 @@ class ChangeInternalUsername extends Command {
 	 * @param string $username
 	 * @param string $uuid
 	 */
-	private function fixLdapUserMappingRecordForUser($username, $uuid) {
+	private function fixCommentRecords($username, $uuid) {
+		$builder = $this->dbConection->getQueryBuilder();
+		$exprBuilder = $builder->expr();
+		$builder
+			->update('comments')
+			->set('actor_id', $builder->createNamedParameter($uuid))
+			->where($exprBuilder->eq('actor_id', $exprBuilder->literal($username)))
+			->execute();
+	}
+
+	/**
+	 * @param string $username
+	 * @param string $uuid
+	 */
+	private function fixCommentRecordReadMarkers($username, $uuid) {
+		$builder = $this->dbConection->getQueryBuilder();
+		$exprBuilder = $builder->expr();
+		$builder
+			->update('comments_read_markers')
+			->set('user_id', $builder->createNamedParameter($uuid))
+			->where($exprBuilder->eq('user_id', $exprBuilder->literal($username)))
+			->execute();
+	}
+
+	/**
+	 * @param string $username
+	 * @param string $uuid
+	 */
+	private function fixLdapUserMappingRecord($username, $uuid) {
 		$builder = $this->dbConection->getQueryBuilder();
 		$exprBuilder = $builder->expr();
 		$builder
@@ -183,10 +219,10 @@ class ChangeInternalUsername extends Command {
 	 * @param string $username
 	 * @param string $uuid
 	 */
-	private function fixMountRecordsForUser($username, $uuid) {
+	private function fixMountRecords($username, $uuid) {
 		$builder = $this->dbConection->getQueryBuilder();
 		$exprBuilder = $builder->expr();
-		//fix get all user mounts
+
 		$mountsOfUser = $builder
 			->select(['id', 'user_id', 'mount_point'])
 			->from('mounts')
@@ -216,7 +252,7 @@ class ChangeInternalUsername extends Command {
 	 * @param string $username
 	 * @param string $uuid
 	 */
-	private function fixPreferencesRecordsForUser($username, $uuid) {
+	private function fixPreferencesRecords($username, $uuid) {
 		$builder = $this->dbConection->getQueryBuilder();
 		$exprBuilder = $builder->expr();
 		$builder
@@ -230,10 +266,10 @@ class ChangeInternalUsername extends Command {
 	 * @param string $username
 	 * @param string $uuid
 	 */
-	private function fixShareRecordsForUser($username, $uuid) {
+	private function fixShareRecords($username, $uuid) {
 		$builder = $this->dbConection->getQueryBuilder();
 		$exprBuilder = $builder->expr();
-		//fix get all user related shares
+
 		$sharesOfUser = $builder
 			->select(['id', 'share_with', 'uid_owner', 'uid_initiator'])
 			->from('share')
@@ -272,13 +308,27 @@ class ChangeInternalUsername extends Command {
 	 * @param string $username
 	 * @param string $uuid
 	 */
-	private function fixStorageRecordForUser($username, $uuid) {
+	private function fixStorageRecord($username, $uuid) {
 		$builder = $this->dbConection->getQueryBuilder();
 		$exprBuilder = $builder->expr();
 		$builder
 			->update('storages')
 			->set('id', $builder->createNamedParameter('home::' . $uuid))
 			->where($exprBuilder->eq('id', $exprBuilder->literal('home::' . $username)))
+			->execute();
+	}
+
+	/**
+	 * @param string $username
+	 * @param string $uuid
+	 */
+	private function fixVcategoryRecords($username, $uuid) {
+		$builder = $this->dbConection->getQueryBuilder();
+		$exprBuilder = $builder->expr();
+		$builder
+			->update('vcategory')
+			->set('uid', $builder->createNamedParameter($uuid))
+			->where($exprBuilder->eq('uid', $exprBuilder->literal($username)))
 			->execute();
 	}
 }
